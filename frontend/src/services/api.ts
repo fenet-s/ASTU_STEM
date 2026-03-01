@@ -1,6 +1,6 @@
 import { Ticket, User, AppNotification } from '../types';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const getHeaders = () => {
   const token = localStorage.getItem('token');
@@ -58,7 +58,7 @@ export const ticketService = {
       delete headers['Content-Type'];
     }
 
-    const res = await fetch(`http://localhost:5000/api/tickets`, {
+    const res = await fetch(`${API_URL}/tickets`, {
       method: 'POST',
       headers,
       body: isFormData ? data : JSON.stringify(data),
@@ -98,14 +98,14 @@ export const analyticsService = {
 
 export const userService = {
   getAllUsers: async (): Promise<User[]> => {
-    const res = await fetch(`http://localhost:5000/api/users`, {
+    const res = await fetch(`${API_URL}/users`, {
       headers: getHeaders(),
     });
     if (!res.ok) throw new Error('Failed to fetch users');
     return res.json();
   },
   updateUser: async (id: string, data: { role?: string; department?: string }) => {
-    const res = await fetch(`http://localhost:5000/api/users/${id}`, {
+    const res = await fetch(`${API_URL}/users/${id}`, {
       method: 'PATCH',
       headers: getHeaders(),
       body: JSON.stringify(data),
@@ -117,14 +117,14 @@ export const userService = {
 
 export const notificationService = {
   getNotifications: async (): Promise<AppNotification[]> => {
-    const res = await fetch(`http://localhost:5000/api/notifications`, {
+    const res = await fetch(`${API_URL}/notifications`, {
       headers: getHeaders(),
     });
     if (!res.ok) throw new Error('Failed to fetch notifications');
     return res.json();
   },
   markAllAsRead: async () => {
-    const res = await fetch(`http://localhost:5000/api/notifications/read-all`, {
+    const res = await fetch(`${API_URL}/notifications/read-all`, {
       method: 'PUT',
       headers: getHeaders(),
     });
@@ -136,7 +136,7 @@ export const notificationService = {
 export const ragService = {
   askQuestion: async (question: string) => {
     // The backend server runs separately on port 5000
-    const res = await fetch(`http://localhost:5000/api/rag`, {
+    const res = await fetch(`${API_URL}/rag`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ question }),
