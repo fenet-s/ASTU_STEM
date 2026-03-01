@@ -1,6 +1,6 @@
-import { Ticket, User, Message } from '../types';
+import { Ticket, User, AppNotification } from '../types';
 
-const API_URL = '/api';
+const API_URL = 'http://localhost:5000/api';
 
 const getHeaders = () => {
   const token = localStorage.getItem('token');
@@ -93,6 +93,43 @@ export const analyticsService = {
       console.error("Unexpected response from server:", text.substring(0, 200));
       throw new Error(`Server error (${res.status}): Expected JSON but received ${contentType || 'unknown content'}`);
     }
+  },
+};
+
+export const userService = {
+  getAllUsers: async (): Promise<User[]> => {
+    const res = await fetch(`http://localhost:5000/api/users`, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to fetch users');
+    return res.json();
+  },
+  updateUser: async (id: string, data: { role?: string; department?: string }) => {
+    const res = await fetch(`http://localhost:5000/api/users/${id}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update user');
+    return res.json();
+  },
+};
+
+export const notificationService = {
+  getNotifications: async (): Promise<AppNotification[]> => {
+    const res = await fetch(`http://localhost:5000/api/notifications`, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to fetch notifications');
+    return res.json();
+  },
+  markAllAsRead: async () => {
+    const res = await fetch(`http://localhost:5000/api/notifications/read-all`, {
+      method: 'PUT',
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to mark read');
+    return res.json();
   },
 };
 

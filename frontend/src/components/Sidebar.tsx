@@ -23,6 +23,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, onSubmitClick,
       { icon: LayoutDashboard, label: 'Dashboard', view: 'dashboard' },
       { icon: BarChart2, label: 'Analytics', view: 'analytics' },
       { icon: ClipboardList, label: 'Ticket Management', view: 'ticket-management' },
+      ...(user.role === 'Admin' ? [{ icon: GraduationCap, label: 'Users', view: 'user-management' }] : []),
     ];
 
   return (
@@ -66,6 +67,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout, onSubmitClick,
       </nav>
 
       <div className="p-6 border-t border-slate-100 space-y-4">
+        {user.role === 'Staff' && (
+          <div className="bg-brand-blue-light/30 rounded-2xl p-4 border border-brand-blue/10">
+            <p className="text-[10px] text-brand-blue font-bold uppercase tracking-wider mb-1">Assigned Unit</p>
+            <p className="text-sm font-semibold text-slate-700">{user.department} Department</p>
+          </div>
+        )}
+
         <div className="bg-slate-50 rounded-2xl p-4">
           <p className="text-xs text-slate-500 font-medium mb-1">Support Hours</p>
           <p className="text-sm font-semibold text-slate-700">Mon - Fri, 8AM - 5PM</p>

@@ -57,6 +57,16 @@ const TicketSchema = new mongoose.Schema({
 
 const Ticket = mongoose.model('Ticket', TicketSchema);
 
+const NotificationSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    title: { type: String, required: true },
+    message: { type: String, required: true },
+    isRead: { type: Boolean, default: false },
+    link: { type: String },
+}, { timestamps: true });
+
+const Notification = mongoose.model('Notification', NotificationSchema);
+
 // --- Router Setup ---
 const apiRouter = express.Router();
 
@@ -112,14 +122,56 @@ apiRouter.post('/auth/login', dbCheck, async (req, res) => {
         if (!isMatch) return res.status(400).json({ msg: "Invalid Credentials" });
 
         const token = jwt.sign(
-            { id: user._id, role: user.role },
+            { id: user._id, role: user.role, department: user.department },
             process.env.JWT_SECRET || 'secret',
             { expiresIn: '1d' }
         );
-        res.json({ token, user: { id: user._id, name: user.name, role: user.role } });
+        res.json({ token, user: { id: user._id, name: user.name, role: user.role, department: user.department } });
     } catch (err: any) {
         console.error("Login Error:", err);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// --- User Management Routes (Admin Only) ---
+apiRouter.get('/users', [auth, dbCheck], async (req: any, res: any) => {
+    try {
+        if (req.user.role !== 'Admin') {
+            return res.status(403).json({ msg: "Access denied: Admins only" });
+        }
+        const users = await User.find().select('-password').sort({ createdAt: -1 });
+        // Map _id to id for frontend compatibility
+        const mappedUsers = users.map(u => ({
+            id: u._id,
+            name: (u as any).name,
+            email: (u as any).email,
+            role: (u as any).role,
+            department: (u as any).department
+        }));
+        res.json(mappedUsers);
+    } catch (err) {
+        console.error("Get Users Error:", err);
+        res.status(500).send('Server Error');
+    }
+});
+
+apiRouter.patch('/users/:id', [auth, dbCheck], async (req: any, res: any) => {
+    try {
+        if (req.user.role !== 'Admin') {
+            return res.status(403).json({ msg: "Access denied: Admins only" });
+        }
+        const { role, department } = req.body;
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ msg: "User not found" });
+
+        if (role) (user as any).role = role;
+        if (department) (user as any).department = department;
+
+        await user.save();
+        res.json({ msg: "User updated successfully", user: { id: user._id, role: (user as any).role, department: (user as any).department } });
+    } catch (err) {
+        console.error("Update User Error:", err);
+        res.status(500).send('Server Error');
     }
 });
 
@@ -184,6 +236,25 @@ apiRouter.get('/analytics', [auth, dbCheck], async (req: any, res: any) => {
     }
 });
 
+// --- Notification Routes ---
+apiRouter.get('/notifications', auth, async (req: any, res: any) => {
+    try {
+        const notifications = await Notification.find({ userId: req.user.id }).sort({ createdAt: -1 }).limit(20);
+        res.json(notifications);
+    } catch (err) {
+        res.status(500).send('Server Error');
+    }
+});
+
+apiRouter.put('/notifications/read-all', auth, async (req: any, res: any) => {
+    try {
+        await Notification.updateMany({ userId: req.user.id }, { isRead: true });
+        res.json({ msg: "All notifications marked as read" });
+    } catch (err) {
+        res.status(500).send('Server Error');
+    }
+});
+
 // --- Ticket Routes ---
 apiRouter.post('/tickets', [auth, dbCheck], async (req: any, res: any) => {
     try {
@@ -195,6 +266,26 @@ apiRouter.post('/tickets', [auth, dbCheck], async (req: any, res: any) => {
             category
         });
         const ticket = await newTicket.save();
+
+        // NOTIFY STAFF AND ADMINS
+        try {
+            const recipients = await User.find({
+                $or: [
+                    { role: 'Staff', department: category },
+                    { role: 'Admin' }
+                ]
+            });
+            const notifications = recipients.map(user => ({
+                userId: user._id,
+                title: "New Complaint Submitted",
+                message: `A new ${category} complaint: "${title}"`,
+                link: `/ticket-management`
+            }));
+            if (notifications.length > 0) {
+                await Notification.insertMany(notifications);
+            }
+        } catch (nErr) { console.error(nErr); }
+
         res.json({ msg: "Complaint submitted successfully!", ticket });
     } catch (err) {
         console.error("Submit Ticket Error:", err);
@@ -214,10 +305,26 @@ apiRouter.get('/tickets/my-tickets', [auth, dbCheck], async (req: any, res: any)
 
 apiRouter.get('/tickets/all', [auth, dbCheck], async (req: any, res: any) => {
     try {
-        if (req.user.role === 'Student') {
+        // Fetch LIVE user data to avoid stale JWT issues
+        const user = await User.findById(req.user.id);
+        if (!user || user.role === 'Student') {
             return res.status(403).json({ msg: "Access denied" });
         }
-        const tickets = await Ticket.find().populate('student', 'name email').sort({ createdAt: -1 });
+
+        const query: any = {};
+        console.log(`DEBUG [Frontend Server]: Live User Check - Name: ${user.name}, Role: ${user.role}, Dept: ${(user as any).department}`);
+
+        if (user.role === 'Staff') {
+            const dept = (user as any).department;
+            if (dept && dept !== 'General') {
+                query.category = dept;
+            } else {
+                query.category = 'Other';
+            }
+        }
+
+        console.log("DEBUG [Frontend Server]: Generated Query:", query);
+        const tickets = await Ticket.find(query).populate('student', 'name email').sort({ createdAt: -1 });
         res.json(tickets);
     } catch (err) {
         console.error("Get All Tickets Error:", err);
@@ -236,6 +343,17 @@ apiRouter.patch('/tickets/:id', [auth, dbCheck], async (req: any, res: any) => {
         ticket.status = status || ticket.status;
         ticket.remarks = remarks || ticket.remarks;
         await ticket.save();
+
+        // NOTIFY STUDENT
+        try {
+            await new Notification({
+                userId: (ticket as any).student,
+                title: "Ticket Status Updated",
+                message: `Your ticket "${(ticket as any).title}" is now "${(ticket as any).status}".`,
+                link: `/my-tickets`
+            }).save();
+        } catch (nErr) { console.error(nErr); }
+
         res.json({ msg: "Ticket updated successfully", ticket });
     } catch (err) {
         console.error("Update Ticket Error:", err);

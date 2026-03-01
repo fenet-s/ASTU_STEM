@@ -23,3 +23,13 @@ export interface User {
   email?: string;
   department?: string;
 }
+
+export interface AppNotification {
+  _id: string;
+  userId: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  link?: string;
+  createdAt: string;
+}

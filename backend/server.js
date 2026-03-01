@@ -19,6 +19,8 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/tickets', require('./routes/ticket'));
 app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/rag', require('./routes/rag'));
+app.use('/api/users', require('./routes/user'));
+app.use('/api/notifications', require('./routes/notification'));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

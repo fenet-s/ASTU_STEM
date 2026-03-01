@@ -5,8 +5,9 @@ import { TicketTable } from "./components/TicketTable";
 import { AIChatWidget } from "./components/AIChatWidget";
 import { AuthPage } from "./components/AuthPage";
 import { SubmitTicketModal } from "./components/SubmitTicketModal";
-import { Ticket, User } from "./types";
-import { ticketService } from "./services/api";
+import { Ticket, User, AppNotification } from "./types";
+import { ticketService, notificationService } from "./services/api";
+import { NotificationDropdown } from "./components/NotificationDropdown";
 import {
   Ticket as TicketIcon,
   CheckCircle2,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { AnalyticsDashboard } from "./components/AnalyticsDashboard";
+import { UserManagement } from "./components/UserManagement";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -25,6 +27,8 @@ export default function App() {
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState("dashboard");
   const [searchQuery, setSearchQuery] = useState("");
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -42,8 +46,38 @@ export default function App() {
       if (user.role !== "Student") {
         setCurrentView("analytics");
       }
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 5000); // 5s poll for demo
+      return () => clearInterval(interval);
     }
   }, [user]);
+
+  const fetchNotifications = async () => {
+    try {
+      const data = await notificationService.getNotifications();
+      console.log(`DEBUG: Fetched ${data.length} notifications for role: ${user?.role}`);
+      setNotifications(data);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+    }
+  };
+
+  const handleReadAll = async () => {
+    try {
+      await notificationService.markAllAsRead();
+      fetchNotifications();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleNotificationClick = (link?: string) => {
+    if (link) {
+      const view = link.replace('/', '');
+      if (view) setCurrentView(view);
+    }
+    setIsNotificationOpen(false);
+  };
 
   const fetchTickets = async () => {
     if (!user) return;
@@ -157,6 +191,8 @@ export default function App() {
             />
           </div>
         );
+      case "user-management":
+        return <UserManagement />;
       case "ticket-management":
       case "dashboard":
       default:
@@ -240,10 +276,27 @@ export default function App() {
               />
             </div>
 
-            <button className="relative p-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors">
-              <Bell size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white" />
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+                className="relative p-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors"
+                title="Notifications"
+              >
+                <Bell size={20} />
+                {notifications.filter(n => !n.isRead).length > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white" />
+                )}
+              </button>
+
+              {isNotificationOpen && (
+                <NotificationDropdown
+                  notifications={notifications}
+                  onReadAll={handleReadAll}
+                  onClose={() => setIsNotificationOpen(false)}
+                  onNotificationClick={handleNotificationClick}
+                />
+              )}
+            </div>
 
             <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
               <div className="text-right hidden sm:block">
@@ -251,7 +304,7 @@ export default function App() {
                   {user.name}
                 </p>
                 <p className="text-[11px] font-medium text-slate-500 mt-1 uppercase tracking-wider">
-                  {user.role === "Staff" ? "System Admin (ASTU)" : user.role}
+                  {user.role === "Staff" ? `${user.department} Staff` : user.role}
                 </p>
               </div>
               <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 font-bold overflow-hidden">
