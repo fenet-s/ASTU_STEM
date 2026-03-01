@@ -24,10 +24,10 @@ const UserSchema = new mongoose.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    role: { 
-        type: String, 
-        enum: ['Student', 'Staff', 'Admin'], 
-        default: 'Student' 
+    role: {
+        type: String,
+        enum: ['Student', 'Staff', 'Admin'],
+        default: 'Student'
     },
     department: { type: String, default: 'General' }
 }, { timestamps: true });
@@ -42,15 +42,15 @@ const TicketSchema = new mongoose.Schema({
     },
     title: { type: String, required: true },
     description: { type: String, required: true },
-    category: { 
-        type: String, 
+    category: {
+        type: String,
         required: true,
         enum: ['Dormitory', 'Lab Equipment', 'Internet', 'Classroom', 'Other']
     },
-    status: { 
-        type: String, 
-        enum: ['Open', 'In Progress', 'Resolved'], 
-        default: 'Open' 
+    status: {
+        type: String,
+        enum: ['Open', 'In Progress', 'Resolved'],
+        default: 'Open'
     },
     remarks: { type: String, default: "" },
 }, { timestamps: true });
@@ -63,9 +63,9 @@ const apiRouter = express.Router();
 // --- Middleware ---
 const dbCheck = (req: any, res: any, next: any) => {
     if (mongoose.connection.readyState !== 1) {
-        return res.status(503).json({ 
-            msg: "Database not connected.", 
-            details: "The MONGO_URI environment variable is missing or the connection failed. Please configure it in the Secrets panel." 
+        return res.status(503).json({
+            msg: "Database not connected.",
+            details: "The MONGO_URI environment variable is missing or the connection failed. Please configure it in the Secrets panel."
         });
     }
     next();
@@ -112,8 +112,8 @@ apiRouter.post('/auth/login', dbCheck, async (req, res) => {
         if (!isMatch) return res.status(400).json({ msg: "Invalid Credentials" });
 
         const token = jwt.sign(
-            { id: user._id, role: user.role }, 
-            process.env.JWT_SECRET || 'secret', 
+            { id: user._id, role: user.role },
+            process.env.JWT_SECRET || 'secret',
             { expiresIn: '1d' }
         );
         res.json({ token, user: { id: user._id, name: user.name, role: user.role } });
@@ -133,7 +133,7 @@ apiRouter.get('/analytics', [auth, dbCheck], async (req: any, res: any) => {
 
         const totalComplaints = await Ticket.countDocuments();
         const activeUsers = await User.countDocuments();
-        
+
         const categoryStats = await Ticket.aggregate([
             { $group: { _id: "$category", value: { $sum: 1 } } },
             { $project: { name: "$_id", value: 1, _id: 0 } }
@@ -243,6 +243,29 @@ apiRouter.patch('/tickets/:id', [auth, dbCheck], async (req: any, res: any) => {
     }
 });
 
+// --- RAG Route Proxy (Forwarding to Backend Port 5000) ---
+apiRouter.post('/rag', auth, async (req: any, res: any) => {
+    console.log("🟢 Incoming RAG request to frontend server:", req.body);
+    try {
+        const fetch = (await import('node-fetch')).default;
+
+        const response = await fetch('http://localhost:5000/api/rag', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(req.header('x-auth-token') ? { 'x-auth-token': req.header('x-auth-token') } : {})
+            },
+            body: JSON.stringify(req.body)
+        });
+
+        const data = await response.json();
+        return res.status(response.status).json(data);
+    } catch (err: any) {
+        console.error("RAG Proxy Error:", err);
+        return res.status(500).json({ msg: "Failed to communicate with RAG backend service.", details: err.message });
+    }
+});
+
 // --- Mount Router ---
 apiRouter.get('/ping', (req, res) => res.json({ msg: 'pong', time: new Date().toISOString() }));
 app.use('/api', apiRouter);
@@ -256,7 +279,7 @@ app.use('/api/*', (req, res) => {
 // --- Vite & Server Start ---
 async function startServer() {
     const PORT = 3000;
-    
+
     // Database Connection (Lazy)
     const MONGO_URI = process.env.MONGO_URI;
     if (MONGO_URI) {

@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, X, Bot, User, MessageSquare, Sparkles } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { cn } from '../lib/utils';
 import { Message, Ticket } from '../types';
+import { ragService } from '../services/api';
 
 interface AIChatWidgetProps {
   tickets: Ticket[];
@@ -40,30 +40,16 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({ tickets, userName })
     setIsLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-      const model = ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        config: {
-          systemInstruction: `You are ASTU Support AI. You help students at Adama Science and Technology University. 
-          Current User: ${userName}
-          User's Tickets: ${JSON.stringify(tickets)}
-          Be helpful, concise, and refer to specific tickets if asked.`,
-        },
-        contents: [
-          ...messages.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
-          { role: 'user', parts: [{ text: userMessage }] }
-        ]
-      });
+      const data = await ragService.askQuestion(userMessage);
 
-      const response = await model;
-      const text = response.text;
-      
-      if (text) {
-        setMessages(prev => [...prev, { role: 'model', text }]);
+      if (data && data.answer) {
+        setMessages(prev => [...prev, { role: 'model', text: data.answer }]);
+      } else {
+        throw new Error("Invalid response missing answer");
       }
-    } catch (error) {
-      console.error("AI Error:", error);
-      setMessages(prev => [...prev, { role: 'model', text: "Sorry, I encountered an error. Please try again later." }]);
+    } catch (error: any) {
+      console.error("RAG Chat Error:", error);
+      setMessages(prev => [...prev, { role: 'model', text: error.message || "Sorry, I encountered an error communicating with the support engine. Please try again later." }]);
     } finally {
       setIsLoading(false);
     }
@@ -93,7 +79,7 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({ tickets, userName })
                   </p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => setIsOpen(false)}
                 className="p-1 hover:bg-white/10 rounded-lg transition-colors"
               >
@@ -169,8 +155,8 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({ tickets, userName })
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
           "flex items-center gap-2 px-6 py-3 rounded-full shadow-xl transition-all duration-300",
-          isOpen 
-            ? "bg-slate-800 text-white scale-90" 
+          isOpen
+            ? "bg-slate-800 text-white scale-90"
             : "bg-brand-olive text-white hover:bg-brand-olive-dark hover:scale-105"
         )}
       >

@@ -6,6 +6,7 @@ export interface Ticket {
   category: 'Dormitory' | 'Lab Equipment' | 'Internet' | 'Classroom' | 'Other';
   status: 'Open' | 'In Progress' | 'Resolved';
   remarks?: string;
+  attachmentUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

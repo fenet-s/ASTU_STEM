@@ -15,18 +15,49 @@ export const SubmitTicketModal: React.FC<SubmitTicketModalProps> = ({ isOpen, on
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     category: 'Internet',
   });
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setError('File must be less than 5MB');
+        return;
+      }
+      setImageFile(file);
+
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImagePreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setImagePreview(null);
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
-      await ticketService.submitTicket(formData);
+      const data = new FormData();
+      data.append('title', formData.title);
+      data.append('description', formData.description);
+      data.append('category', formData.category);
+      if (imageFile) {
+        data.append('image', imageFile);
+      }
+
+      await ticketService.submitTicket(data as any);
       setSubmitted(true);
       onSuccess();
       // Auto-close after 2s
@@ -46,6 +77,8 @@ export const SubmitTicketModal: React.FC<SubmitTicketModalProps> = ({ isOpen, on
     setTimeout(() => {
       setSubmitted(false);
       setError('');
+      setImageFile(null);
+      setImagePreview(null);
       setFormData({ title: '', description: '', category: 'Internet' });
     }, 300);
   };
@@ -133,6 +166,46 @@ export const SubmitTicketModal: React.FC<SubmitTicketModalProps> = ({ isOpen, on
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue transition-all resize-none text-sm"
                     placeholder="Provide more details about the problem..."
                   />
+                </div>
+
+                {/* Optional Image/File Upload */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex justify-between">
+                    <span>Attach File</span>
+                    <span className="text-slate-400 font-normal">Optional</span>
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <label className="flex-1 px-4 py-8 border-2 border-dashed border-slate-200 rounded-xl hover:bg-slate-50 hover:border-brand-blue/50 transition-all cursor-pointer text-center group">
+                      <input
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx"
+                        className="hidden"
+                        onChange={handleImageChange}
+                      />
+                      <span className="text-sm text-slate-500 font-medium group-hover:text-brand-blue transition-colors">
+                        Click to upload a file
+                      </span>
+                      <p className="text-xs text-slate-400 mt-1">Image, PDF, Word (Max 5MB)</p>
+                    </label>
+                    {imageFile && (
+                      <div className="relative w-24 h-24 rounded-xl overflow-hidden shadow-sm shrink-0 border border-slate-200 bg-slate-50 flex items-center justify-center p-2">
+                        {imagePreview ? (
+                          <img src={imagePreview} alt="Preview" className="w-full h-full object-cover rounded-lg" />
+                        ) : (
+                          <span className="text-slate-600 font-medium text-xs break-all text-center line-clamp-3 leading-snug">
+                            {imageFile.name}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); setImageFile(null); setImagePreview(null); }}
+                          className="absolute top-1 right-1 bg-white/90 p-1 rounded-full shadow-sm hover:bg-rose-50 hover:text-rose-500 transition-colors"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex gap-3 pt-1">

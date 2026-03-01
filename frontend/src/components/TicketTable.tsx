@@ -135,8 +135,26 @@ export const TicketTable: React.FC<TicketTableProps> = ({ tickets, user, onUpdat
                       <div className="space-y-2">
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Full Description</p>
                         <p className="text-sm text-slate-700 leading-relaxed">{ticket.description}</p>
+                        {ticket.attachmentUrl && (
+                          <div className="mt-4">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Attached File</p>
+                            <a href={ticket.attachmentUrl} target="_blank" rel="noopener noreferrer" className="inline-block">
+                              {ticket.attachmentUrl.match(/\.(jpeg|jpg|png|webp|gif)$/i) ? (
+                                <img
+                                  src={ticket.attachmentUrl}
+                                  alt="Ticket Attachment"
+                                  className="w-full max-w-sm rounded-xl border border-slate-200 shadow-sm hover:opacity-90 transition-opacity"
+                                />
+                              ) : (
+                                <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl hover:border-brand-blue transition-colors text-brand-blue font-medium text-sm">
+                                  📄 View Document Attachment
+                                </div>
+                              )}
+                            </a>
+                          </div>
+                        )}
                         {ticket.remarks && (
-                          <div className="mt-3 p-3 bg-white border border-slate-200 rounded-xl">
+                          <div className="mt-4 p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
                             <p className="text-xs font-semibold text-brand-blue mb-1">Staff Remarks</p>
                             <p className="text-sm text-slate-600">{ticket.remarks}</p>
                           </div>

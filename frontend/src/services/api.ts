@@ -48,11 +48,20 @@ export const ticketService = {
     if (!res.ok) throw new Error('Failed to fetch all tickets');
     return res.json();
   },
-  submitTicket: async (data: { title: string; description: string; category: string }) => {
-    const res = await fetch(`${API_URL}/tickets`, {
+  submitTicket: async (data: any) => {
+    const isFormData = data instanceof FormData;
+    const headers = getHeaders();
+
+    // If sending FormData, do not manually set Content-Type.
+    // Fetch will automatically set it to multipart/form-data with the correct boundary.
+    if (isFormData) {
+      delete headers['Content-Type'];
+    }
+
+    const res = await fetch(`http://localhost:5000/api/tickets`, {
       method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(data),
+      headers,
+      body: isFormData ? data : JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Failed to submit ticket');
     return res.json();
@@ -73,7 +82,7 @@ export const analyticsService = {
     const res = await fetch(`${API_URL}/analytics`, {
       headers: getHeaders(),
     });
-    
+
     const contentType = res.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
       const data = await res.json();
@@ -82,6 +91,29 @@ export const analyticsService = {
     } else {
       const text = await res.text();
       console.error("Unexpected response from server:", text.substring(0, 200));
+      throw new Error(`Server error (${res.status}): Expected JSON but received ${contentType || 'unknown content'}`);
+    }
+  },
+};
+
+export const ragService = {
+  askQuestion: async (question: string) => {
+    // The backend server runs separately on port 5000
+    const res = await fetch(`http://localhost:5000/api/rag`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ question }),
+    });
+
+    // Attempt to parse JSON response
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.msg || data.details || 'Failed to get answer');
+      return data;
+    } else {
+      const text = await res.text();
+      console.error("Unexpected RAG response:", text.substring(0, 200));
       throw new Error(`Server error (${res.status}): Expected JSON but received ${contentType || 'unknown content'}`);
     }
   },

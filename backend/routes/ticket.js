@@ -2,23 +2,43 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const Ticket = require('../models/Ticket');
+const upload = require('../middleware/upload');
+const cloudinary = require('../config/cloudinary');
+const fs = require('fs');
 
 // 1. SUBMIT A COMPLAINT (Student only)
-router.post('/', auth, async (req, res) => {
+router.post('/', [auth, upload.single('image')], async (req, res) => {
     try {
         const { title, description, category } = req.body;
-        
+
+        // Handle image upload to Cloudinary if file exists
+        let attachmentUrl = "";
+        if (req.file) {
+            const result = await cloudinary.uploader.upload(req.file.path, {
+                folder: 'astu_complaints',
+                resource_type: 'auto'
+            });
+            attachmentUrl = result.secure_url;
+
+            // Delete local file after upload
+            fs.unlinkSync(req.file.path);
+        }
+
         const newTicket = new Ticket({
             student: req.user.id,
             title,
             description,
-            category
+            category,
+            attachmentUrl
         });
 
         const ticket = await newTicket.save();
         res.json({ msg: "Complaint submitted successfully!", ticket });
     } catch (err) {
-        res.status(500).send('Server Error');
+        console.error("============= TICKET UPLOAD ERROR =============");
+        console.error(err);
+        console.error("===============================================");
+        res.status(500).json({ msg: 'Server Error', error: err.message });
     }
 });
 
